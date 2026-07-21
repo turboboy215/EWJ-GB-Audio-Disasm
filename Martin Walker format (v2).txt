@@ -1,0 +1,252 @@
+Martin Walker's sound engine appears to be based on his Commodore 64 sound engine. The first game to use this sound engine is Speedball 2: Brutal Deluxe. However, after this game, the sound engine was largely reprogrammed with major changes to the sound data format. For this reason, details about the sound engine is split into 2 sections - first for the early version (before 0.9, according to available source code), and the other for the later/common versions.
+
+
+
+
+Early versions (1.x)
+=================================================================================================
+The sound data is split into a total of 8 total sections which are referenced via a somewhat external table which is used to calculate the offsets consisting of relative 2-byte (16-bit) pointers. These are all added one at a time to the previous result, starting with the absolute base value of the sound data. However, since there are only 6 values in the table, with the final value being the end of the sound data, some of them are added twice. The final (absolute) pointers are stored in RAM. These are grouped as following, with explanations below:
+
+1. Sound effects bank - base of sound data
+2. Voice bank 1 - add value 1
+3. Voice bank 2 - add value 2
+4. Sequence offsets (low byte) - add value 2
+5. Sequence offsets (high byte) - add value 3
+6. Sequence data - add value 3
+7. Track offsets - add value 4
+8. Track data - add value 5
+(Additional - end of sound data - add value 6)
+
+(NOTE: For the only game using this sound engine version, Speedball 2, the sound data is split into 2 - one for the title and the other for the rest of the game, including two jingles and sound effects. The offsets for the sound data are controlled by register E when initializing the engine - if 0, then title, if 1, then in-game.)
+
+Sound effects bank
+===========================================
+The sound effects bank is split into three distinct sub-sections, each 4 bytes total. These are structured as follows:
+(Section 1)
+1. Envelope attack/decay
+2. Envelope sustain/release
+3. Attack count
+4. Suspend/release length
+(Section 2)
+1. Wave attack/decay
+2. Wave suspend/release	
+3-4. Start frequency
+(Section 3)
+1. Pitch bend type (0-9):
+	0. No bend
+	1. Up
+	2. Down
+	3. Up start (only during attack count)
+	4. Down start
+	5. Up/down (up during attack count/down during end count)
+	6. Down/up
+	7. Up release (only during end count)
+	8. Down release
+	9. Up/down cycle (changes direction every new count value)
+2-3. Pitch bend amount
+4. (Unused - stereo placement/panning in version 1.3/1.4?)*
+(Section 4)
+1. Special event:
+	0. No special effect
+	1. Arpeggio (uses note values at half speed)
+	2. Trill note (alternating with normal note - 24-7F/80-FF normally used with drum sounds)
+	4. Drum (wave alternates with voice/frequency bend down)
+	8. Chord (uses note values)
+2. Special counter
+3-4. Special frequency
+
+*According to official version information in source code documents, 1.3 was the first version to add stereo support. Since Speedball 2 does not have stereo support, it is version 1.2 or earlier.
+
+Voice bank 1
+===========================================
+The first voice bank includes the first set of parameters for each voice, or instrument. They are structured as follows:
+
+1. Attack time (00-0F)/decay time (00-0F)
+2. Sustain (00-0F)/release (00-0F)
+3. Waveform
+4. Specials:
+(76543210)
+	Bit 0 = (Unused)
+	Bit 1 = Trill (alternating with normal note)
+                  24-7F/80-FF Normally used with drum sounds.
+	Bit 2 = Drum (wave alternates with voice/freq bend down)
+	Bit 3 = Chord (uses Note 1/2/3/4 values)
+	Bit 4 = Attack wave (Used instead of waveform during attack count)
+	Bit 5 = Attack note (used instead of normal note during Atkcnt)
+	Bit 6-7 = (Unused)
+5-7. (Unused)
+8. Used by chord/attack wave/attack note specials
+
+Voice bank 2
+===========================================
+The second voice bank includes the next set of parameters for each voice, or instrument. They are structured as follows:
+1. Attack wave
+2-5. Used by chord/attack wave/attack note specials
+6. Trill
+7. Vibrato (preset values, 00 = off)
+8. Vibrato delay (in frames)
+
+Sequence offsets (low bytes) and (high bytes)
+===========================================
+These two sections are tables containing the offsets to sequences in the sequence data in the following section. These are both comprised of 8-bit values, which in the first table, are the lower bytes, and in the second table, are the higher bytes. When the respective index values from both tables are combined, these form relative offsets that are to be added to the start of the sequence bank to get the pointer to each sequence.
+
+Sequence bank
+===========================================
+Sequences are "phrases" of notes and other commands played by a single channel of music. The location to these sequences are referenced using the previous two tables simultaneously. Data in a sequence is comprised in a series of commands as follows:
+
+xyzzzzzz
+
+X = If set, change voice OR pitch bend (see below)
+Y = If set, rest
+Z = Duration
+
+If Y is set, then it is a rest.
+If X is set and the highest bit of the following byte is set, then it is a voice change command, with the parameter being used for the voice number.
+If X is set and the highest bit of the following byte is not set, then it is a pitch bend command, with the parameter being used for the pitch bend amount.
+If neither X and Y are set, then the following byte is a note.
+
+Sequences are terminated with a value of FF.
+
+Track offsets
+===========================================
+The track offsets section contains the "header" for each song in the sound data, which are 16 bytes total for each song.
+
+A song header is structured as follows:
+1. Pointer to channel 1 track (low byte)
+2. Pointer to channel 2 track (low byte)
+3. Pointer to channel 3 track (low byte)
+4. Pointer to channel 4 track (high byte)
+5. Pointer to channel 5 track (high byte)
+6. Pointer to channel 6 track (high byte)
+7-8. (Unknown/unused)
+9-16. These are "tick" values that are used to control the speed in an unusual way. Lower values mean higher speed.
+
+Track data
+===========================================
+Three tracks are used simultaneously in a song represent each channel. Despite the Game Boy having 4 hardware channels, this sound engine has an "artificial limit" of only 3 channels, probably due to this being based on the Commodore 64 format where its sound chip only has 3 channels. However, a voice can play a note on one of the respective pulse/wave channels and/or the noise channel.
+Tracks are structured with the following commands:
+00-3F xxxxxxxx = Play sequence number of (command) times
+	Parameters: X = sequence number
+40 = Track loop end
+	(Note: This should be used only after loop start. 1 level only - nested loops are not supported.)
+41-7F = Track loop start (e.g. 46 = loop 6 times)
+FD xxxxxxxx = Fade command
+	Parameters: X = Fade time
+FE -------- = End of channel
+	Parameters: - = (Unused)
+FF xxxxxxxx = Loop channel/jump to step
+	Parameters: X = Step (offset) number from start of track
+
+
+
+
+Other versions (2.0 and later)
+=================================================================================================
+In other versions, the sound data is split into the following sections:
+
+1. Sound effects bank
+2. Voice bank
+3. Sequence offsets
+4. Sequence data
+5. Track offsets
+6. Track data
+
+The addresses of these, similar to the early version, are calculated using a base value which is progressively added to using relative addresses in a table. However, the table, unlike the early version, is stored more directly at the start of the sound data.
+
+Sound effects bank
+===========================================
+Sound effects in other versions are stored as values of one continuous block per sound effect, 16 bytes total:
+1. Envelope attack/decay
+2. Envelope sustain/release
+3. Attack count
+4. Suspend/release length
+5. Wave attack/decay
+6. Wave suspend/release	
+7-8. Start frequency
+9. Pitch bend type (0-9):
+	0. No bend
+	1. Up
+	2. Down
+	3. Up start (only during attack count)
+	4. Down start
+	5. Up/down (up during attack count/down during end count)
+	6. Down/up
+	7. Up release (only during end count)
+	8. Down release
+	9. Up/down cycle (changes direction every new count value)
+10-11. Pitch bend amount
+12. Stereo placement/panning (10 = left, 11 = center, 01 = right)
+(Section 4)
+13.
+	0. No special effect
+	1. Arpeggio (uses note values at half speed)
+	2. Trill note (alternating with normal note - 24-7F/80-FF normally used with drum sounds)
+	4. Drum (wave alternates with voice/frequency bend down)
+	8. Chord (uses note values)
+14. Special counter
+15-16. Special frequency
+
+Voice bank
+===========================================
+Voices in later versions are stored in a single table, which is a series of 16-bit values representing each instrument as follows:
+1. Attack time (00-0F)/decay time (00-0F)
+2. Sustain (00-0F)/release (00-0F)
+3. Waveform
+4. Specials:
+(76543210)
+	Bit 0 = (Unused)
+	Bit 1 = Trill (alternating with normal note)
+                  24-7F/80-FF Normally used with drum sounds.
+	Bit 2 = Drum (wave alternates with voice/freq bend down)
+	Bit 3 = Chord (uses Note 1/2/3/4 values)
+	Bit 4 = Attack wave (Used instead of waveform during attack count)
+	Bit 5 = Attack note (used instead of normal note during Atkcnt)
+	Bit 6-7 = (Unused)
+5. Stereo placement/panning (10 = left, 11 = center, 01 = right)
+6. Signed offset to note (use as channel transpose value)
+7. Attack peak level (00-0F, can be used to set overall volume)
+8. Used by chord/attack wave/attack note specials
+9. Attack count (00-03)
+10. Attack wave
+11-13. Used by chord/attack wave/attack note specials
+14. Trill
+15. Vibrato (preset values - 00-12, 00 = off)
+16. Vibrato delay (in frames)
+
+Sequence offsets
+===========================================
+Similar to version 1.x, but is a single table comprised of 2-byte (16-bit) values.
+
+Sequence data
+===========================================
+The sequence format has significantly changed since version 1.x, making use of full individual bytes for commands rather than bit values:
+00-7F = Play note
+	Parameters: xxxxxxxx (X = duration)
+80 = Change voice/instrument
+	Parameters: xxxxxxxx (X = voice number)
+81 = Rest (key off voice for set amount of time)
+	Parameters: xxxxxxxx (X = duration)
+82 = Pitch bend
+	Parameters: xxxxxxxx (X = amount, signed)
+83 = Set tempo
+	Parameters: xxxxxxxx (X = tempo value, default is 125 in later versions)
+84 = Tie (the following two notes are slurred together)
+	Parameters: -------- (- = unused)
+85 = Gate (notes gated off (released) at length)
+	Parameters: xxxxxxxx (X = length)
+86 = Global transpose
+	Parameters: xxxxxxxx (X = value, signed)
+87-FE = (Invalid)
+FF = End of sequence
+
+Track offsets
+===========================================
+In these versions, the "header" for each song is 8 bytes total, as follows:
+1-2. Pointer to channel 1 track
+3-4. Pointer to channel 2 track
+5-6. Pointer to channel 3 track
+7-8. (Unknown/unused)
+
+Track data
+===========================================
+Same as version 1.x.
