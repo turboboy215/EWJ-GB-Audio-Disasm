@@ -19,6 +19,20 @@ The sound data is split into a total of 8 total sections which are referenced vi
 
 (NOTE: For the only game using this sound engine version, Speedball 2, the sound data is split into 2 - one for the title and the other for the rest of the game, including two jingles and sound effects. The offsets for the sound data are controlled by register E when initializing the engine - if 0, then title, if 1, then in-game.)
 
+The following code is used to load the base values:
+InVec:
+	bit 0, e				;If E is 1, then use second song data
+	ld de, GameData_Title	;Otherwise, use first song data
+	ld hl, GameTable_Title
+	jr z, .InVec2
+
+	ld de, GameData_Ingame
+	ld hl, GameTable_Ingame
+
+Which equals the following in hex:
+
+CB 43 11 ?? ?? 21 ?? ?? 28 06 11 ?? ?? 21 ?? ??
+
 Sound effects bank
 ===========================================
 The sound effects bank is split into three distinct sub-sections, each 4 bytes total. These are structured as follows:
@@ -152,6 +166,21 @@ In other versions, the sound data is split into the following sections:
 6. Track data
 
 The addresses of these, similar to the early version, are calculated using a base value which is progressively added to using relative addresses in a table. However, the table, unlike the early version, is stored more directly at the start of the sound data.
+
+The following code is used to load the base values:
+
+	;Chunk table start address
+	ld hl, GameDat1
+	;Music data start address
+	ld de, GameDat1+14
+	ld a, e
+	ld [SFXBank], a
+	ld a, d
+	ld [SFXBank+1], a
+	ld bc, SFXTab			;Calculate SFX table address
+
+Which equals the following in hex:
+21 ?? ?? 11 9C ?? ?? EA ?? ?? 7A EA ?? ?? 01 ?? ??
 
 Sound effects bank
 ===========================================
