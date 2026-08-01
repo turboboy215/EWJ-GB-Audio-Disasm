@@ -108,16 +108,15 @@ Sequence bank
 ===========================================
 Sequences are "phrases" of notes and other commands played by a single channel of music. The location to these sequences are referenced using the previous two tables simultaneously. Data in a sequence is comprised in a series of commands as follows:
 
-xyzzzzzz
+xyzzzzzz (abbbbbbb) (cddddddd)
 
-X = If set, change voice OR pitch bend (see below)
-Y = If set, rest
+X = If set, change voice OR pitch bend
+Y = If set, is a rest (bytes 2 and 3 are not present)
 Z = Duration
-
-If Y is set, then it is a rest.
-If X is set and the highest bit of the following byte is set, then it is a voice change command, with the parameter being used for the voice number.
-If X is set and the highest bit of the following byte is not set, then it is a pitch bend command, with the parameter being used for the pitch bend amount.
-If neither X and Y are set, then the following byte is a note.
+A = Used only if X is set. If this bit is set, then it is a pitch bend; if not set, then is a voice change.
+B = Parameter for A
+C = If set, then is a tied/slurred note
+D = Note
 
 Sequences are terminated with a value of FF.
 
